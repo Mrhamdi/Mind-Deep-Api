@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 import requests
 from fastapi.middleware.cors import CORSMiddleware
+import os
 
 app = FastAPI()
 
@@ -13,9 +14,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-API_KEY = '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'
+
+API_KEY =os.environ["API_KEY"]
 API_URL = 'https://openrouter.ai/api/v1/chat/completions'
-OMDB_API_KEY = '8af4eb41'  
+OMDB_API_KEY = os.environ["OMDB_API_KEY"]
 OMDB_API_URL = 'http://www.omdbapi.com/'
 
 headers = {
