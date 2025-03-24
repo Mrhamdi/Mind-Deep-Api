@@ -39,7 +39,7 @@ async def get_movie(user_prompt: str):
         "messages": [{"role": "user", "content": user_prompt + prefix}]
     }
     
-    response = requests.post(API_URL, json=data, headers=headers)
+    response = requests.post(API_URL, json=data, headers=headers,verify=False)
     
     if response.status_code == 200:
         response_data = response.json()
