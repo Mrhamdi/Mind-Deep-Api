@@ -2,6 +2,8 @@ from fastapi import FastAPI, HTTPException
 import requests
 from fastapi.middleware.cors import CORSMiddleware
 import os
+import sqlite3
+from passlib.hash import pbkdf2_sha256
 
 app = FastAPI()
 
@@ -15,10 +17,9 @@ app.add_middleware(
 )
 
 
-API_KEY =os.environ["API_K"]
-print(API_KEY)
+API_KEY ='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'
 API_URL = 'https://openrouter.ai/api/v1/chat/completions'
-OMDB_API_KEY = os.environ["OMDB_API_K"]
+OMDB_API_KEY =  '8af4eb41' 
 OMDB_API_URL = 'http://www.omdbapi.com/'
 
 headers = {
@@ -39,7 +40,7 @@ async def get_movie(user_prompt: str):
         "messages": [{"role": "user", "content": user_prompt + prefix}]
     }
     
-    response = requests.post(API_URL, json=data, headers=headers,verify=False)
+    response = requests.post(API_URL, json=data, headers=headers)
     
     if response.status_code == 200:
         response_data = response.json()
@@ -99,3 +100,46 @@ def get_movie_cover_from_omdb(movie_name: str):
             return None
     else:
         return None 
+
+# --- Database Setup ---
+def get_db_connection():
+    conn = sqlite3.connect("users.db")
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def create_user_table():
+    conn = get_db_connection()
+    conn.execute('''CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL
+    )''')
+    conn.commit()
+    conn.close()
+
+create_user_table()
+
+# --- Auth Endpoints ---
+from fastapi import Form
+
+@app.post("/signup")
+async def signup(username: str = Form(...), password: str = Form(...)):
+    hashed_password = pbkdf2_sha256.hash(password)
+    try:
+        conn = get_db_connection()
+        conn.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, hashed_password))
+        conn.commit()
+        conn.close()
+        return {"message": "User created successfully"}
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=400, detail="Username already exists.")
+
+@app.post("/login")
+async def login(username: str = Form(...), password: str = Form(...)):
+    conn = get_db_connection()
+    user = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+    conn.close()
+    if user and pbkdf2_sha256.verify(password, user["password"]):
+        return {"message": "Login successful"}
+    else:
+        raise HTTPException(status_code=401, detail="Invalid username or password.")
