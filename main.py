@@ -17,9 +17,9 @@ app.add_middleware(
 )
 
 
-API_KEY ='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'
+API_KEY =os.environ["API_K"]
 API_URL = 'https://openrouter.ai/api/v1/chat/completions'
-OMDB_API_KEY =  '8af4eb41' 
+OMDB_API_KEY =  os.environ["OMDB_API_K"]
 OMDB_API_URL = 'http://www.omdbapi.com/'
 
 headers = {
