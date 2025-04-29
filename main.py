@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 import sqlite3
 from passlib.hash import pbkdf2_sha256
+from contextlib import contextmanager
 
 app = FastAPI()
 
@@ -102,20 +103,23 @@ def get_movie_cover_from_omdb(movie_name: str):
         return None 
 
 # --- Database Setup ---
+@contextmanager
 def get_db_connection():
-    conn = sqlite3.connect("users.db")
+    conn = sqlite3.connect("users.db", timeout=10, check_same_thread=False)
     conn.row_factory = sqlite3.Row
-    return conn
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 def create_user_table():
-    conn = get_db_connection()
-    conn.execute('''CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE NOT NULL,
-        password TEXT NOT NULL
-    )''')
-    conn.commit()
-    conn.close()
+    with get_db_connection() as conn:
+        conn.execute('''CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL
+        )''')
+        conn.commit()
 
 create_user_table()
 
@@ -126,19 +130,17 @@ from fastapi import Form
 async def signup(username: str = Form(...), password: str = Form(...)):
     hashed_password = pbkdf2_sha256.hash(password)
     try:
-        conn = get_db_connection()
-        conn.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, hashed_password))
-        conn.commit()
-        conn.close()
+        with get_db_connection() as conn:
+            conn.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, hashed_password))
+            conn.commit()
         return {"message": "User created successfully"}
     except sqlite3.IntegrityError:
         raise HTTPException(status_code=400, detail="Username already exists.")
 
 @app.post("/login")
 async def login(username: str = Form(...), password: str = Form(...)):
-    conn = get_db_connection()
-    user = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
-    conn.close()
+    with get_db_connection() as conn:
+        user = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
     if user and pbkdf2_sha256.verify(password, user["password"]):
         return {"message": "Login successful"}
     else:
